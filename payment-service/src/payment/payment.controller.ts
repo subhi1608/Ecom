@@ -7,7 +7,13 @@ export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
   @EventPattern('stock_reserved')
-  async handleStockReserved(@Payload() data: any) {
-    await this.paymentService.processPayment(data);
+  async handleStockReserved(
+    @Payload()
+    message: {
+      correlationId: string;
+      data: { orderId: string; productId: string; quantity: number; customerEmail: string };
+    },
+  ) {
+    await this.paymentService.processPayment(message.data, message.correlationId);
   }
 }

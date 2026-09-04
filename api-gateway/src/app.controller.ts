@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import { Request } from 'express';
 import { CreateOrderDto } from './dto/create-order.dto';
 
 const ORDER_SERVICE_URL =
@@ -14,17 +15,21 @@ export class AppController {
   constructor(private readonly http: HttpService) {}
 
   @Post()
-  async createOrder(@Body() body: CreateOrderDto) {
+  async createOrder(@Body() body: CreateOrderDto, @Req() req: Request) {
     const res = await firstValueFrom(
-      this.http.post(`${ORDER_SERVICE_URL}/orders`, body),
+      this.http.post(`${ORDER_SERVICE_URL}/orders`, body, {
+        headers: { 'x-correlation-id': req.correlationId },
+      }),
     );
     return res.data;
   }
 
   @Get(':id')
-  async getOrder(@Param('id') id: string) {
+  async getOrder(@Param('id') id: string, @Req() req: Request) {
     const res = await firstValueFrom(
-      this.http.get(`${ORDER_SERVICE_URL}/orders/${id}`),
+      this.http.get(`${ORDER_SERVICE_URL}/orders/${id}`, {
+        headers: { 'x-correlation-id': req.correlationId },
+      }),
     );
     return res.data;
   }

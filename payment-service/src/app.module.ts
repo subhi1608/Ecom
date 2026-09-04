@@ -1,7 +1,23 @@
 import { Module } from '@nestjs/common';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { PaymentModule } from './payment/payment.module';
+import { Payment } from './payment/entities/payment.entity';
+import { HealthModule } from './health/health.module';
 
 @Module({
-  imports: [PaymentModule],
+  imports: [
+    TypeOrmModule.forRoot({
+      type: 'postgres',
+      host: process.env.DB_HOST,
+      port: parseInt(process.env.DB_PORT || '5432', 10),
+      username: process.env.DB_USER,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_NAME,
+      entities: [Payment],
+      synchronize: true, // OK for now — replace with migrations before real prod use
+    }),
+    PaymentModule,
+    HealthModule,
+  ],
 })
 export class AppModule {}

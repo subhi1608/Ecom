@@ -58,6 +58,11 @@ services:
     depends_on:
       - rabbitmq
       - orders-db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   inventory-service:
     build: ./inventory-service
@@ -68,6 +73,11 @@ services:
     depends_on:
       - rabbitmq
       - inventory-db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   payment-service:
     build: ./payment-service
@@ -78,6 +88,11 @@ services:
     depends_on:
       - rabbitmq
       - payment-db
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   notification-service:
     build: ./notification-service
@@ -87,6 +102,11 @@ services:
       - "3004:3004"
     depends_on:
       - rabbitmq
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3004/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   api-gateway:
     build: ./api-gateway
@@ -96,6 +116,11 @@ services:
       - "3000:3000"
     depends_on:
       - order-service
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
 volumes:
   payment_data:

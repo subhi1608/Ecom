@@ -1,7 +1,11 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { OrdersModule } from './orders/orders.module';
 import { Order } from './orders/entities/order.entity';
+import { APP_FILTER } from '@nestjs/core';
+import { AllExceptionsFilter } from './common/all-exceptions.filter';
+import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -16,6 +20,17 @@ import { Order } from './orders/entities/order.entity';
       synchronize: true, // OK for now — replace with migrations before real prod use
     }),
     OrdersModule,
+    HealthModule,
+  ],
+  providers: [
+    {
+      provide: APP_FILTER,
+      useClass: AllExceptionsFilter,
+    },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
+  }
+}

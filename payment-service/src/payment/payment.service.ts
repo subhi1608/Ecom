@@ -14,12 +14,15 @@ export class PaymentService implements OnModuleInit {
     await this.client.connect();
   }
 
-  async processPayment(data: {
-    orderId: string;
-    productId: string;
-    quantity: number;
-    customerEmail: string;
-  }) {
+  async processPayment(
+    data: {
+      orderId: string;
+      productId: string;
+      quantity: number;
+      customerEmail: string;
+    },
+    correlationId: string,
+  ) {
     // Mock gateway decision
     const success = Math.random() > 0.15;
     const status = success ? PaymentStatus.COMPLETED : PaymentStatus.FAILED;
@@ -34,7 +37,9 @@ export class PaymentService implements OnModuleInit {
     } catch (err) {
       // 23505 = Postgres unique_violation → we've already processed this order
       if (err instanceof QueryFailedError && (err as any).code === '23505') {
-        console.log(`[payment-service] duplicate event for order ${data.orderId}, skipping`);
+        console.log(
+          `[payment-service] [${correlationId}] duplicate event for order ${data.orderId}, skipping`,
+        );
         return;
       }
       throw err; // any other DB error → let it propagate (message will nack/retry)
@@ -43,15 +48,18 @@ export class PaymentService implements OnModuleInit {
     // Only reached on a genuinely new order. Publish the outcome AFTER
     // the row is committed, so we never announce a payment we didn't record.
     if (status === PaymentStatus.FAILED) {
-      console.log(`[payment-service] payment FAILED for order ${data.orderId}`);
-      this.client.emit('payment_failed', { orderId: data.orderId, reason: 'payment_declined' });
+      console.log(`[payment-service] [${correlationId}] payment FAILED for order ${data.orderId}`);
+      this.client.emit('payment_failed', {
+        correlationId,
+        data: { orderId: data.orderId, reason: 'payment_declined' },
+      });
       return;
     }
 
-    console.log(`[payment-service] payment SUCCESS for order ${data.orderId}`);
+    console.log(`[payment-service] [${correlationId}] payment SUCCESS for order ${data.orderId}`);
     this.client.emit('payment_completed', {
-      orderId: data.orderId,
-      customerEmail: data.customerEmail,
+      correlationId,
+      data: { orderId: data.orderId, customerEmail: data.customerEmail },
     });
   }
 }
