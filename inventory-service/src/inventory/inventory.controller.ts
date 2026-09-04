@@ -7,8 +7,15 @@ export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) {}
 
   @EventPattern('order_created')
-  async handleOrderCreated(@Payload() data: any, @Ctx() context: RmqContext) {
-    await this.inventoryService.reserveStock(data);
+  async handleOrderCreated(
+    @Payload()
+    message: {
+      correlationId: string;
+      data: { orderId: string; productId: string; quantity: number; customerEmail: string };
+    },
+    @Ctx() context: RmqContext,
+  ) {
+    await this.inventoryService.reserveStock(message.data, message.correlationId);
 
     // Manual ack — since this event triggers a real side effect (stock
     // reservation), we only ack after the reservation attempt completes.
@@ -21,9 +28,11 @@ export class InventoryController {
   }
 
   @EventPattern('payment_failed')
-  async handlePaymentFailed(@Payload() data: any) {
+  async handlePaymentFailed(
+    @Payload() message: { correlationId: string; data: { orderId: string } },
+  ) {
     // Compensating transaction: payment failed downstream, release the
     // stock we reserved earlier for this order.
-    await this.inventoryService.releaseStock(data.orderId);
+    await this.inventoryService.releaseStock(message.data.orderId, message.correlationId);
   }
 }

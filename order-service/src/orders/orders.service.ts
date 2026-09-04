@@ -15,18 +15,24 @@ export class OrdersService implements OnModuleInit {
     await this.client.connect();
   }
 
-  async createOrder(dto: { productId: string; quantity: number; customerEmail: string }) {
+  async createOrder(
+    dto: { productId: string; quantity: number; customerEmail: string },
+    correlationId: string,
+  ) {
     const order = this.orderRepo.create({ ...dto, status: OrderStatus.PENDING });
     await this.orderRepo.save(order);
 
     this.client.emit('order_created', {
-      orderId: order.id,
-      productId: order.productId,
-      quantity: order.quantity,
-      customerEmail: order.customerEmail,
+      correlationId,
+      data: {
+        orderId: order.id,
+        productId: order.productId,
+        quantity: order.quantity,
+        customerEmail: order.customerEmail,
+      },
     });
 
-    console.log(`[order-service] order ${order.id} created, event published`);
+    console.log(`[order-service] [${correlationId}] order ${order.id} created, event published`);
     return order;
   }
 
@@ -36,13 +42,13 @@ export class OrdersService implements OnModuleInit {
     return order;
   }
 
-  async markFulfilled(orderId: string) {
+  async markFulfilled(orderId: string, correlationId: string) {
     await this.orderRepo.update(orderId, { status: OrderStatus.FULFILLED });
-    console.log(`[order-service] order ${orderId} FULFILLED`);
+    console.log(`[order-service] [${correlationId}] order ${orderId} FULFILLED`);
   }
 
-  async markFailed(orderId: string, reason: string) {
+  async markFailed(orderId: string, reason: string, correlationId: string) {
     await this.orderRepo.update(orderId, { status: OrderStatus.FAILED, failureReason: reason });
-    console.log(`[order-service] order ${orderId} FAILED: ${reason}`);
+    console.log(`[order-service] [${correlationId}] order ${orderId} FAILED: ${reason}`);
   }
 }

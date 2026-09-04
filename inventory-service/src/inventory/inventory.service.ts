@@ -15,12 +15,15 @@ export class InventoryService implements OnModuleInit {
     await this.seedStock();
   }
 
-  async reserveStock(data: {
-    orderId: string;
-    productId: string;
-    quantity: number;
-    customerEmail: string;
-  }) {
+  async reserveStock(
+    data: {
+      orderId: string;
+      productId: string;
+      quantity: number;
+      customerEmail: string;
+    },
+    correlationId: string,
+  ) {
     await this.dataSource.transaction(async (manager) => {
       // Idempotency: if this order already has a reservation, skip.
       // (A duplicate order_created event shouldn't reserve twice.)
@@ -28,7 +31,9 @@ export class InventoryService implements OnModuleInit {
         where: { orderId: data.orderId },
       });
       if (existing) {
-        console.log(`[inventory-service] order ${data.orderId} already reserved, skipping`);
+        console.log(
+          `[inventory-service] [${correlationId}] order ${data.orderId} already reserved, skipping`,
+        );
         return;
       }
 
@@ -41,10 +46,12 @@ export class InventoryService implements OnModuleInit {
         .getOne();
 
       if (!item || item.availableStock < data.quantity) {
-        console.log(`[inventory-service] insufficient stock for order ${data.orderId}`);
+        console.log(
+          `[inventory-service] [${correlationId}] insufficient stock for order ${data.orderId}`,
+        );
         this.client.emit('stock_failed', {
-          orderId: data.orderId,
-          reason: 'insufficient_stock',
+          correlationId,
+          data: { orderId: data.orderId, reason: 'insufficient_stock' },
         });
         return;
       }
@@ -60,19 +67,22 @@ export class InventoryService implements OnModuleInit {
       });
 
       console.log(
-        `[inventory-service] reserved ${data.quantity}x ${data.productId} for order ${data.orderId}`,
+        `[inventory-service] [${correlationId}] reserved ${data.quantity}x ${data.productId} for order ${data.orderId}`,
       );
 
       this.client.emit('stock_reserved', {
-        orderId: data.orderId,
-        productId: data.productId,
-        quantity: data.quantity,
-        customerEmail: data.customerEmail,
+        correlationId,
+        data: {
+          orderId: data.orderId,
+          productId: data.productId,
+          quantity: data.quantity,
+          customerEmail: data.customerEmail,
+        },
       });
     });
   }
 
-  async releaseStock(orderId: string) {
+  async releaseStock(orderId: string, correlationId: string) {
     await this.dataSource.transaction(async (manager) => {
       const reservation = await manager
         .createQueryBuilder(Reservation, 'r')
@@ -101,7 +111,7 @@ export class InventoryService implements OnModuleInit {
       await manager.save(reservation);
 
       console.log(
-        `[inventory-service] released ${reservation.quantity}x ${reservation.productId} for failed order ${orderId}`,
+        `[inventory-service] [${correlationId}] released ${reservation.quantity}x ${reservation.productId} for failed order ${orderId}`,
       );
     });
   }
