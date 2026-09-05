@@ -45,10 +45,11 @@ Watch the logs of all 4 services (`docker compose logs -f`) to see the event cha
 ## What's stubbed vs real
 - Payment is **mocked** — `payment.service.ts` randomly succeeds/fails (~85% success) so you can observe the failure/compensation path without needing a real payment gateway.
 - Notification is **mocked** — just logs "email sent" instead of hitting a real provider.
-- Databases are real Postgres, but this starter uses plain SQL via `pg` for simplicity — swap in TypeORM/Prisma once you're comfortable with the flow.
+- Databases are real Postgres, and order-service/inventory-service/payment-service all use **TypeORM entities + repositories** (not raw `pg` queries as in the original scaffold) — including a transactional, row-locked (`pessimistic_write`) stock reservation in inventory-service and a DB unique-constraint-based idempotency guard in payment-service.
 
-## Next steps (see the execution plan doc)
-- Add idempotency keys on payment-service (dedupe `order_created` events)
-- Add correlation IDs threaded through every event for tracing
-- Add retry/backoff on notification-service
+## Next steps (see plan.md and agents.md for full detail)
+- Enable CORS on api-gateway (needed before any browser UI can call it)
+- Add correlation IDs threaded through every event and HTTP request for tracing
+- Add health/readiness endpoints on all 5 services
+- Add retry/backoff and a dead-letter queue (notification-service first)
 - Add Grafana + Prometheus for observability

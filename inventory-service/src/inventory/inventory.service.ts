@@ -1,4 +1,4 @@
-import { Injectable, Inject, OnModuleInit } from '@nestjs/common';
+import { Injectable, Inject, OnModuleInit, NotFoundException } from '@nestjs/common';
 import { ClientProxy } from '@nestjs/microservices';
 import { DataSource } from 'typeorm';
 import { InventoryItem, Reservation, ReservationStatus } from './entities/inventory.entity';
@@ -114,6 +114,14 @@ export class InventoryService implements OnModuleInit {
         `[inventory-service] [${correlationId}] released ${reservation.quantity}x ${reservation.productId} for failed order ${orderId}`,
       );
     });
+  }
+
+  async getStock(productId: string) {
+    const item = await this.dataSource.getRepository(InventoryItem).findOne({
+      where: { productId },
+    });
+    if (!item) throw new NotFoundException(`Product ${productId} not found`);
+    return { productId: item.productId, availableStock: item.availableStock };
   }
 
   // Replaces the old hardcoded STOCK object — seeds once on first boot.
