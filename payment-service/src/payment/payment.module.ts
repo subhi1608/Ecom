@@ -15,7 +15,13 @@ import { Payment } from './entities/payment.entity';
         options: {
           urls: [process.env.RABBITMQ_URL || 'amqp://localhost:5672'],
           queue: 'events_queue',
-          queueOptions: { durable: true },
+          queueOptions: {
+            durable: true,
+            arguments: {
+              'x-dead-letter-exchange': '',
+              'x-dead-letter-routing-key': 'events_queue.dlq',
+            },
+          },
         },
       },
     ]),

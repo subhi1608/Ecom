@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { Request } from 'express';
@@ -24,12 +24,38 @@ export class AppController {
     return res.data;
   }
 
+  @Get()
+  async listOrders(
+    @Query() query: Record<string, string>,
+    @Req() req: Request,
+  ) {
+    const res = await firstValueFrom(
+      this.http.get(`${ORDER_SERVICE_URL}/orders`, {
+        params: query,
+        headers: { 'x-correlation-id': req.correlationId },
+      }),
+    );
+    return res.data;
+  }
+
   @Get(':id')
   async getOrder(@Param('id') id: string, @Req() req: Request) {
     const res = await firstValueFrom(
       this.http.get(`${ORDER_SERVICE_URL}/orders/${id}`, {
         headers: { 'x-correlation-id': req.correlationId },
       }),
+    );
+    return res.data;
+  }
+
+  @Post(':id/cancel')
+  async cancelOrder(@Param('id') id: string, @Req() req: Request) {
+    const res = await firstValueFrom(
+      this.http.post(
+        `${ORDER_SERVICE_URL}/orders/${id}/cancel`,
+        {},
+        { headers: { 'x-correlation-id': req.correlationId } },
+      ),
     );
     return res.data;
   }

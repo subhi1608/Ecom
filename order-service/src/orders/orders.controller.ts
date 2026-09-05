@@ -1,8 +1,9 @@
-import { Body, Controller, Post, Get, Param, Req } from '@nestjs/common';
+import { Body, Controller, Post, Get, Param, Query, Req } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { Request } from 'express';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { OrderStatus } from './entities/order.entity';
 
 @Controller('orders')
 export class OrdersController {
@@ -14,9 +15,29 @@ export class OrdersController {
     return this.ordersService.createOrder(dto, req.correlationId);
   }
 
+  @Get()
+  async findAll(
+    @Query('status') status?: OrderStatus,
+    @Query('customerEmail') customerEmail?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.ordersService.listOrders({
+      status,
+      customerEmail,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+  }
+
   @Get(':id')
   async findOne(@Param('id') id: string) {
     return this.ordersService.getOrder(id);
+  }
+
+  @Post(':id/cancel')
+  async cancel(@Param('id') id: string, @Req() req: Request) {
+    return this.ordersService.cancelOrder(id, req.correlationId);
   }
 
   // --- Event consumers: downstream services report back here ---

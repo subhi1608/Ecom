@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
 import { ReservationStatus } from './entities/inventory.entity';
 
@@ -52,5 +53,29 @@ describe('InventoryService', () => {
       correlationId: 'corr-456',
       data: { orderId: 'order-1', reason: 'insufficient_stock' },
     });
+  });
+});
+
+describe('InventoryService.getStock', () => {
+  function setupGetStock(item: any) {
+    const repo: any = { findOne: jest.fn().mockResolvedValue(item) };
+    const dataSource: any = { getRepository: jest.fn().mockReturnValue(repo) };
+    const client: any = { connect: jest.fn(), emit: jest.fn() };
+    const service = new InventoryService(client, dataSource);
+    return { service, repo };
+  }
+
+  it('returns the product\'s current stock', async () => {
+    const { service } = setupGetStock({ productId: 'prod-1', availableStock: 42 });
+
+    const result = await service.getStock('prod-1');
+
+    expect(result).toEqual({ productId: 'prod-1', availableStock: 42 });
+  });
+
+  it('throws NotFoundException when the product does not exist', async () => {
+    const { service } = setupGetStock(null);
+
+    await expect(service.getStock('missing')).rejects.toThrow(NotFoundException);
   });
 });
