@@ -24,3 +24,5 @@ Thumbs.db
 
 # Docker volumes (if any local ones)
 postgres-data/
+docs/
+plan.md
