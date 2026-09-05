@@ -32,6 +32,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Drain in-flight RMQ handlers and close the connection cleanly on
+  // SIGTERM/SIGINT instead of dropping a notification mid-flight.
+  app.enableShutdownHooks();
+
   app.connectMicroservice<RmqOptions>({
     transport: Transport.RMQ,
     options: {

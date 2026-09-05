@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, Param, Query, Req } from '@nestjs/common';
+import { Body, Controller, Post, Get, Headers, Param, Query, Req } from '@nestjs/common';
 import { EventPattern, Payload } from '@nestjs/microservices';
 import { Request } from 'express';
 import { OrdersService } from './orders.service';
@@ -11,8 +11,12 @@ export class OrdersController {
 
   // Called by the API gateway
   @Post()
-  async create(@Body() dto: CreateOrderDto, @Req() req: Request) {
-    return this.ordersService.createOrder(dto, req.correlationId);
+  async create(
+    @Body() dto: CreateOrderDto,
+    @Req() req: Request,
+    @Headers('idempotency-key') idempotencyKey?: string,
+  ) {
+    return this.ordersService.createOrder(dto, req.correlationId, idempotencyKey);
   }
 
   @Get()
