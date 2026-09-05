@@ -27,6 +27,9 @@ export class Order {
   @Column({ nullable: true })
   failureReason: string;
 
+  @Column({ nullable: true, unique: true })
+  idempotencyKey: string;
+
   @CreateDateColumn()
   createdAt: Date;
 

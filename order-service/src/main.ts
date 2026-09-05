@@ -21,6 +21,10 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule);
 
+  // Drain in-flight HTTP requests and RMQ handlers (and close the RMQ
+  // connection cleanly) on SIGTERM/SIGINT instead of dropping messages.
+  app.enableShutdownHooks();
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,

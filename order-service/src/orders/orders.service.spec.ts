@@ -1,4 +1,5 @@
 import { NotFoundException, ConflictException } from '@nestjs/common';
+import { QueryFailedError } from 'typeorm';
 import { OrdersService } from './orders.service';
 import { OrderStatus } from './entities/order.entity';
 
@@ -46,6 +47,124 @@ describe('OrdersService', () => {
     orderRepo.findOne.mockResolvedValue(null);
 
     await expect(service.getOrder('missing-id')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('OrdersService.createOrder idempotency', () => {
+  function setupIdempotent() {
+    const newOrder = {
+      id: 'order-new',
+      productId: 'prod-1',
+      quantity: 2,
+      customerEmail: 'a@b.com',
+      status: OrderStatus.PENDING,
+      idempotencyKey: 'key-abc',
+    };
+    const orderRepo: any = {
+      findOne: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockReturnValue(newOrder),
+      save: jest.fn().mockResolvedValue(newOrder),
+    };
+    const client: any = { connect: jest.fn(), emit: jest.fn() };
+    const service = new OrdersService(orderRepo, client);
+    return { service, orderRepo, client, newOrder };
+  }
+
+  it('creates a new order and stores the idempotency key when none exists yet', async () => {
+    const { service, orderRepo, client, newOrder } = setupIdempotent();
+
+    const result = await service.createOrder(
+      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      'corr-1',
+      'key-abc',
+    );
+
+    expect(orderRepo.findOne).toHaveBeenCalledWith({ where: { idempotencyKey: 'key-abc' } });
+    expect(orderRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: 'key-abc' }),
+    );
+    expect(client.emit).toHaveBeenCalledTimes(1);
+    expect(result).toEqual(newOrder);
+  });
+
+  it('returns the existing order without creating a duplicate or re-emitting the event', async () => {
+    const { service, orderRepo, client } = setupIdempotent();
+    const existing = {
+      id: 'order-existing',
+      productId: 'prod-1',
+      quantity: 2,
+      customerEmail: 'a@b.com',
+      status: OrderStatus.PENDING,
+      idempotencyKey: 'key-abc',
+    };
+    orderRepo.findOne.mockResolvedValue(existing);
+
+    const result = await service.createOrder(
+      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      'corr-1',
+      'key-abc',
+    );
+
+    expect(orderRepo.create).not.toHaveBeenCalled();
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalled();
+    expect(result).toEqual(existing);
+  });
+
+  it('does not check for an existing order when no idempotency key is given', async () => {
+    const { service, orderRepo } = setupIdempotent();
+
+    await service.createOrder(
+      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      'corr-1',
+    );
+
+    expect(orderRepo.findOne).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the row the concurrent request inserted when a race loses the unique-constraint check', async () => {
+    // Two requests with the same key both see "no existing order" from the
+    // initial findOne (the check-then-act race), then one wins the DB
+    // insert and the other hits the unique constraint (Postgres 23505).
+    // The loser should recover by re-querying, not by throwing to the client.
+    const { service, orderRepo, client } = setupIdempotent();
+    const winnerRow = {
+      id: 'order-winner',
+      productId: 'prod-1',
+      quantity: 2,
+      customerEmail: 'a@b.com',
+      status: OrderStatus.PENDING,
+      idempotencyKey: 'key-abc',
+    };
+    orderRepo.findOne
+      .mockResolvedValueOnce(null) // this request's own pre-check
+      .mockResolvedValueOnce(winnerRow); // recovery re-query after the conflict
+    const conflictError = Object.assign(new QueryFailedError('insert', [], new Error('duplicate key')), {
+      code: '23505',
+    });
+    orderRepo.save.mockRejectedValue(conflictError);
+
+    const result = await service.createOrder(
+      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      'corr-1',
+      'key-abc',
+    );
+
+    expect(result).toEqual(winnerRow);
+    expect(client.emit).not.toHaveBeenCalled();
+  });
+
+  it('re-throws a save failure that is not a unique-constraint conflict', async () => {
+    const { service, orderRepo } = setupIdempotent();
+    orderRepo.save.mockRejectedValue(new Error('connection lost'));
+
+    await expect(
+      service.createOrder(
+        { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+        'corr-1',
+        'key-abc',
+      ),
+    ).rejects.toThrow('connection lost');
   });
 });
 
