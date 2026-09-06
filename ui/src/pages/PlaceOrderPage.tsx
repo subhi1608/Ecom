@@ -8,7 +8,6 @@ export function PlaceOrderPage() {
   const navigate = useNavigate();
   const [productId, setProductId] = useState('');
   const [quantity, setQuantity] = useState('1');
-  const [customerEmail, setCustomerEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null);
@@ -26,7 +25,7 @@ export function PlaceOrderPage() {
     setSubmitting(true);
     try {
       const order = await api.createOrder(
-        { productId, quantity: Number(quantity), customerEmail },
+        { productId, quantity: Number(quantity) },
         idempotencyKeyRef.current,
       );
       setPlacedOrder(order);
@@ -70,21 +69,6 @@ export function PlaceOrderPage() {
             value={quantity}
             onChange={(e) => setQuantity(e.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="customerEmail" className="block text-sm font-medium text-slate-700 mb-1">
-            Customer Email
-          </label>
-          <input
-            id="customerEmail"
-            type="email"
-            required
-            value={customerEmail}
-            onChange={(e) => setCustomerEmail(e.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900"
-            placeholder="customer@example.com"
           />
         </div>
 

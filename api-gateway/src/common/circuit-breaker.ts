@@ -5,6 +5,12 @@ type State = 'CLOSED' | 'OPEN' | 'HALF_OPEN';
 export interface CircuitBreakerOptions {
   failureThreshold: number;
   resetTimeoutMs: number;
+  // Decides whether a thrown error reflects a SICK DEPENDENCY (count it) or
+  // a healthy dependency rejecting this particular request (ignore it).
+  // Without this, a downstream 404 or 409 counts as a failure — so five
+  // lookups of a non-existent order would open the circuit and take the
+  // endpoint down for every user. Defaults to counting everything.
+  isFailure?: (err: unknown) => boolean;
 }
 
 // A minimal circuit breaker: trips OPEN after `failureThreshold` consecutive
@@ -49,6 +55,12 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (err) {
+      // A rejection the predicate excludes still propagates to the caller —
+      // it just doesn't count against the circuit.
+      if (this.options.isFailure && !this.options.isFailure(err)) {
+        this.probeInFlight = false;
+        throw err;
+      }
       this.onFailure();
       throw err;
     }

@@ -21,11 +21,20 @@ export interface PaginatedOrders {
 export interface CreateOrderInput {
   productId: string;
   quantity: number;
-  customerEmail: string;
 }
 
 export interface InventoryItem {
   productId: string;
   available: number;
   [key: string]: unknown;
+}
+
+export interface AuthUser {
+  id: string;
+  email: string;
+}
+
+export interface Credentials {
+  email: string;
+  password: string;
 }

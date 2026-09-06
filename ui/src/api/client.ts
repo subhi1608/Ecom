@@ -1,5 +1,7 @@
 import type {
+  AuthUser,
   CreateOrderInput,
+  Credentials,
   InventoryItem,
   Order,
   PaginatedOrders,
@@ -26,6 +28,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   try {
     res = await fetch(`${GATEWAY_URL}${path}`, {
       ...options,
+      // Required for the httpOnly auth cookie to travel cross-origin.
+      // Without this the browser silently omits it and everything 401s.
+      credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -89,5 +94,36 @@ export const api = {
 
   getStock(productId: string): Promise<InventoryItem> {
     return request<InventoryItem>(`/inventory/${encodeURIComponent(productId)}`);
+  },
+
+  login(credentials: Credentials): Promise<{ user: AuthUser }> {
+    return request<{ user: AuthUser }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
+
+  register(credentials: Credentials): Promise<{ user: AuthUser }> {
+    return request<{ user: AuthUser }>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+  },
+
+  logout(): Promise<{ success: boolean }> {
+    return request<{ success: boolean }>('/auth/logout', { method: 'POST' });
+  },
+
+  // Resolves to null rather than throwing on 401. A logged-out visitor is
+  // the expected case for this probe, and throwing would make the bootstrap
+  // path indistinguishable from a real failure.
+  async me(): Promise<AuthUser | null> {
+    try {
+      const result = await request<{ user: AuthUser }>('/auth/me');
+      return result.user;
+    } catch (err) {
+      if (err instanceof ApiError && err.statusCode === 401) return null;
+      throw err;
+    }
   },
 };
