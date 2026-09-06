@@ -81,3 +81,50 @@ describe('CircuitBreaker', () => {
     jest.useRealTimers();
   });
 });
+
+describe('CircuitBreaker isFailure predicate', () => {
+  it('does not trip on errors the predicate excludes', async () => {
+    // A downstream 404 proves the dependency is HEALTHY — it answered. If
+    // such responses counted as failures, five lookups of a non-existent
+    // order would open the circuit and take the endpoint down for everyone.
+    const notFound = Object.assign(new Error('not found'), { status: 404 });
+    const breaker = new CircuitBreaker({
+      failureThreshold: 2,
+      resetTimeoutMs: 1000,
+      isFailure: (err: any) => err.status !== 404,
+    });
+
+    for (let i = 0; i < 5; i++) {
+      await expect(breaker.execute(() => Promise.reject(notFound))).rejects.toThrow('not found');
+    }
+
+    // Circuit must still be closed: a real call gets through.
+    await expect(breaker.execute(() => Promise.resolve('ok'))).resolves.toBe('ok');
+  });
+
+  it('still trips on errors the predicate counts', async () => {
+    const breaker = new CircuitBreaker({
+      failureThreshold: 2,
+      resetTimeoutMs: 1000,
+      isFailure: (err: any) => err.status !== 404,
+    });
+    const outage = Object.assign(new Error('ECONNREFUSED'), { status: undefined });
+
+    await expect(breaker.execute(() => Promise.reject(outage))).rejects.toThrow('ECONNREFUSED');
+    await expect(breaker.execute(() => Promise.reject(outage))).rejects.toThrow('ECONNREFUSED');
+
+    const fn = jest.fn().mockResolvedValue('should not run');
+    await expect(breaker.execute(fn)).rejects.toThrow(ServiceUnavailableException);
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('counts every error as a failure when no predicate is supplied', async () => {
+    const breaker = new CircuitBreaker({ failureThreshold: 1, resetTimeoutMs: 1000 });
+
+    await expect(breaker.execute(() => Promise.reject(new Error('boom')))).rejects.toThrow('boom');
+
+    const fn = jest.fn().mockResolvedValue('nope');
+    await expect(breaker.execute(fn)).rejects.toThrow(ServiceUnavailableException);
+    expect(fn).not.toHaveBeenCalled();
+  });
+});

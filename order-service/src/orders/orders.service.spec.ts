@@ -27,8 +27,9 @@ describe('OrdersService', () => {
     const { service, client, order } = setup();
 
     await service.createOrder(
-      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      { productId: 'prod-1', quantity: 2 },
       'corr-123',
+      'a@b.com',
     );
 
     expect(client.emit).toHaveBeenCalledWith('order_created', {
@@ -46,7 +47,7 @@ describe('OrdersService', () => {
     const { service, orderRepo } = setup();
     orderRepo.findOne.mockResolvedValue(null);
 
-    await expect(service.getOrder('missing-id')).rejects.toThrow(NotFoundException);
+    await expect(service.getOrder('missing-id', 'a@b.com')).rejects.toThrow(NotFoundException);
   });
 });
 
@@ -74,8 +75,9 @@ describe('OrdersService.createOrder idempotency', () => {
     const { service, orderRepo, client, newOrder } = setupIdempotent();
 
     const result = await service.createOrder(
-      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      { productId: 'prod-1', quantity: 2 },
       'corr-1',
+      'a@b.com',
       'key-abc',
     );
 
@@ -100,8 +102,9 @@ describe('OrdersService.createOrder idempotency', () => {
     orderRepo.findOne.mockResolvedValue(existing);
 
     const result = await service.createOrder(
-      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      { productId: 'prod-1', quantity: 2 },
       'corr-1',
+      'a@b.com',
       'key-abc',
     );
 
@@ -115,8 +118,9 @@ describe('OrdersService.createOrder idempotency', () => {
     const { service, orderRepo } = setupIdempotent();
 
     await service.createOrder(
-      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      { productId: 'prod-1', quantity: 2 },
       'corr-1',
+      'a@b.com',
     );
 
     expect(orderRepo.findOne).not.toHaveBeenCalled();
@@ -145,8 +149,9 @@ describe('OrdersService.createOrder idempotency', () => {
     orderRepo.save.mockRejectedValue(conflictError);
 
     const result = await service.createOrder(
-      { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+      { productId: 'prod-1', quantity: 2 },
       'corr-1',
+      'a@b.com',
       'key-abc',
     );
 
@@ -160,8 +165,9 @@ describe('OrdersService.createOrder idempotency', () => {
 
     await expect(
       service.createOrder(
-        { productId: 'prod-1', quantity: 2, customerEmail: 'a@b.com' },
+        { productId: 'prod-1', quantity: 2 },
         'corr-1',
+        'a@b.com',
         'key-abc',
       ),
     ).rejects.toThrow('connection lost');
@@ -182,10 +188,10 @@ describe('OrdersService.listOrders', () => {
   it('applies default pagination when no filters are given', async () => {
     const { service, orderRepo } = setupList();
 
-    const result = await service.listOrders({});
+    const result = await service.listOrders({}, 'a@b.com');
 
     expect(orderRepo.findAndCount).toHaveBeenCalledWith({
-      where: {},
+      where: { customerEmail: 'a@b.com' },
       skip: 0,
       take: 20,
     });
@@ -195,15 +201,17 @@ describe('OrdersService.listOrders', () => {
   it('applies status and customerEmail filters, custom page/limit', async () => {
     const { service, orderRepo } = setupList();
 
-    await service.listOrders({
-      status: OrderStatus.FULFILLED,
-      customerEmail: 'a@b.com',
-      page: 3,
-      limit: 10,
-    });
+    await service.listOrders(
+      {
+        status: OrderStatus.FULFILLED,
+        page: 3,
+        limit: 10,
+      },
+      'a@b.com',
+    );
 
     expect(orderRepo.findAndCount).toHaveBeenCalledWith({
-      where: { status: OrderStatus.FULFILLED, customerEmail: 'a@b.com' },
+      where: { customerEmail: 'a@b.com', status: OrderStatus.FULFILLED },
       skip: 20,
       take: 10,
     });
@@ -212,10 +220,10 @@ describe('OrdersService.listOrders', () => {
   it('caps limit at 100 even if a larger value is requested', async () => {
     const { service, orderRepo } = setupList();
 
-    await service.listOrders({ limit: 500 });
+    await service.listOrders({ limit: 500 }, 'a@b.com');
 
     expect(orderRepo.findAndCount).toHaveBeenCalledWith({
-      where: {},
+      where: { customerEmail: 'a@b.com' },
       skip: 0,
       take: 100,
     });
@@ -236,12 +244,13 @@ describe('OrdersService.cancelOrder', () => {
   it('cancels a PENDING order and emits order_cancelled', async () => {
     const { service, orderRepo, client } = setupCancel({
       id: 'order-1',
+      customerEmail: 'a@b.com',
       productId: 'prod-1',
       quantity: 2,
       status: OrderStatus.PENDING,
     });
 
-    await service.cancelOrder('order-1', 'corr-123');
+    await service.cancelOrder('order-1', 'corr-123', 'a@b.com');
 
     expect(orderRepo.update).toHaveBeenCalledWith('order-1', { status: OrderStatus.CANCELLED });
     expect(client.emit).toHaveBeenCalledWith('order_cancelled', {
@@ -253,17 +262,102 @@ describe('OrdersService.cancelOrder', () => {
   it('throws ConflictException when the order is not PENDING', async () => {
     const { service } = setupCancel({
       id: 'order-2',
+      customerEmail: 'a@b.com',
       productId: 'prod-1',
       quantity: 1,
       status: OrderStatus.FULFILLED,
     });
 
-    await expect(service.cancelOrder('order-2', 'corr-456')).rejects.toThrow(ConflictException);
+    await expect(service.cancelOrder('order-2', 'corr-456', 'a@b.com')).rejects.toThrow(ConflictException);
   });
 
   it('throws NotFoundException when the order does not exist', async () => {
     const { service } = setupCancel(null);
 
-    await expect(service.cancelOrder('missing-id', 'corr-789')).rejects.toThrow(NotFoundException);
+    await expect(service.cancelOrder('missing-id', 'corr-789', 'a@b.com')).rejects.toThrow(NotFoundException);
+  });
+});
+
+describe('OrdersService ownership enforcement', () => {
+  function setupOwnership(existingOrder: any) {
+    const orderRepo: any = {
+      findOne: jest.fn().mockResolvedValue(existingOrder),
+      findAndCount: jest.fn().mockResolvedValue([[], 0]),
+      update: jest.fn(),
+      create: jest.fn((d) => d),
+      save: jest.fn(async (o) => ({ ...o, id: 'order-new' })),
+    };
+    const client: any = { connect: jest.fn(), emit: jest.fn() };
+    const service = new OrdersService(orderRepo, client);
+    return { service, orderRepo, client };
+  }
+
+  it('forces the listing filter to the authenticated user, ignoring a customerEmail override', async () => {
+    const { service, orderRepo } = setupOwnership(null);
+
+    await service.listOrders(
+      { customerEmail: 'victim@example.com' } as any,
+      'attacker@example.com',
+    );
+
+    // The query param must not be able to widen or redirect the filter.
+    expect(orderRepo.findAndCount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { customerEmail: 'attacker@example.com' },
+      }),
+    );
+  });
+
+  it('returns NotFound (not Forbidden) when fetching another user\'s order', async () => {
+    const { service } = setupOwnership({
+      id: 'order-1',
+      customerEmail: 'owner@example.com',
+      status: OrderStatus.PENDING,
+    });
+
+    // 404 rather than 403 — a 403 would confirm the order exists.
+    await expect(service.getOrder('order-1', 'attacker@example.com')).rejects.toThrow(
+      NotFoundException,
+    );
+  });
+
+  it('returns the order when the requester owns it', async () => {
+    const { service } = setupOwnership({
+      id: 'order-1',
+      customerEmail: 'owner@example.com',
+      status: OrderStatus.PENDING,
+    });
+
+    const result = await service.getOrder('order-1', 'owner@example.com');
+
+    expect(result.id).toBe('order-1');
+  });
+
+  it('refuses to cancel another user\'s order with NotFound', async () => {
+    const { service } = setupOwnership({
+      id: 'order-1',
+      productId: 'p1',
+      quantity: 1,
+      customerEmail: 'owner@example.com',
+      status: OrderStatus.PENDING,
+    });
+
+    await expect(
+      service.cancelOrder('order-1', 'corr-1', 'attacker@example.com'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('takes customerEmail from the authenticated user, not the request body', async () => {
+    const { service, orderRepo } = setupOwnership(null);
+
+    await service.createOrder(
+      { productId: 'p1', quantity: 1 } as any,
+      'corr-1',
+      'real-user@example.com',
+    );
+
+    expect(orderRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ customerEmail: 'real-user@example.com' }),
+    );
   });
 });

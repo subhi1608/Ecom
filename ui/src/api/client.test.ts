@@ -18,7 +18,7 @@ describe('api.createOrder idempotency key', () => {
   });
 
   it('attaches a generated Idempotency-Key header to the request', async () => {
-    await api.createOrder({ productId: 'p1', quantity: 1, customerEmail: 'a@b.com' });
+    await api.createOrder({ productId: 'p1', quantity: 1 });
 
     const [, options] = vi.mocked(fetch).mock.calls[0];
     const headers = options?.headers as Record<string, string>;
@@ -26,8 +26,8 @@ describe('api.createOrder idempotency key', () => {
   });
 
   it('generates a different key for each call when none is supplied', async () => {
-    await api.createOrder({ productId: 'p1', quantity: 1, customerEmail: 'a@b.com' });
-    await api.createOrder({ productId: 'p1', quantity: 1, customerEmail: 'a@b.com' });
+    await api.createOrder({ productId: 'p1', quantity: 1 });
+    await api.createOrder({ productId: 'p1', quantity: 1 });
 
     const headersOf = (callIndex: number) =>
       (vi.mocked(fetch).mock.calls[callIndex][1]?.headers as Record<string, string>)[
@@ -39,11 +39,11 @@ describe('api.createOrder idempotency key', () => {
 
   it('reuses the caller-supplied key across calls instead of generating a new one', async () => {
     await api.createOrder(
-      { productId: 'p1', quantity: 1, customerEmail: 'a@b.com' },
+      { productId: 'p1', quantity: 1 },
       'caller-key-1',
     );
     await api.createOrder(
-      { productId: 'p1', quantity: 1, customerEmail: 'a@b.com' },
+      { productId: 'p1', quantity: 1 },
       'caller-key-1',
     );
 

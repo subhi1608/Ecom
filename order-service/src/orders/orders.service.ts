@@ -16,8 +16,9 @@ export class OrdersService implements OnModuleInit {
   }
 
   async createOrder(
-    dto: { productId: string; quantity: number; customerEmail: string },
+    dto: { productId: string; quantity: number },
     correlationId: string,
+    customerEmail: string,
     idempotencyKey?: string,
   ) {
     // A client-supplied Idempotency-Key lets a retried/double-clicked submit
@@ -30,6 +31,8 @@ export class OrdersService implements OnModuleInit {
 
     const order = this.orderRepo.create({
       ...dto,
+      // Identity comes from the verified token, never from the request body.
+      customerEmail,
       status: OrderStatus.PENDING,
       ...(idempotencyKey ? { idempotencyKey } : {}),
     });
@@ -68,18 +71,21 @@ export class OrdersService implements OnModuleInit {
     return order;
   }
 
-  async listOrders(filters: {
-    status?: OrderStatus;
-    customerEmail?: string;
-    page?: number;
-    limit?: number;
-  }) {
+  async listOrders(
+    filters: {
+      status?: OrderStatus;
+      page?: number;
+      limit?: number;
+    },
+    customerEmail: string,
+  ) {
     const page = filters.page && filters.page > 0 ? filters.page : 1;
     const limit = Math.min(filters.limit && filters.limit > 0 ? filters.limit : 20, 100);
 
-    const where: FindOptionsWhere<Order> = {};
+    // customerEmail is set from the token and deliberately not taken from
+    // `filters` — a query param must not be able to widen this.
+    const where: FindOptionsWhere<Order> = { customerEmail };
     if (filters.status) where.status = filters.status;
-    if (filters.customerEmail) where.customerEmail = filters.customerEmail;
 
     const [data, total] = await this.orderRepo.findAndCount({
       where,
@@ -90,15 +96,21 @@ export class OrdersService implements OnModuleInit {
     return { data, total, page, limit };
   }
 
-  async getOrder(id: string) {
+  async getOrder(id: string, customerEmail: string) {
     const order = await this.orderRepo.findOne({ where: { id } });
-    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    // 404 rather than 403 for someone else's order: a 403 confirms the
+    // order exists, which is itself an information leak.
+    if (!order || order.customerEmail !== customerEmail) {
+      throw new NotFoundException(`Order ${id} not found`);
+    }
     return order;
   }
 
-  async cancelOrder(id: string, correlationId: string) {
+  async cancelOrder(id: string, correlationId: string, customerEmail: string) {
     const order = await this.orderRepo.findOne({ where: { id } });
-    if (!order) throw new NotFoundException(`Order ${id} not found`);
+    if (!order || order.customerEmail !== customerEmail) {
+      throw new NotFoundException(`Order ${id} not found`);
+    }
 
     if (order.status !== OrderStatus.PENDING) {
       throw new ConflictException(

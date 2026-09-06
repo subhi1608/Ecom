@@ -1,4 +1,5 @@
 import { NEVER, of, throwError } from 'rxjs';
+import { ServiceUnavailableException } from '@nestjs/common';
 import { InventoryController } from './inventory.controller';
 
 describe('InventoryController.getStock', () => {
@@ -17,13 +18,18 @@ describe('InventoryController.getStock', () => {
     expect(result).toEqual({ productId: 'p1', available: 10 });
   });
 
-  it('propagates a downstream failure instead of hanging', async () => {
+  it('surfaces a downstream connection failure as 503 without leaking internals', async () => {
     const { controller, http } = setup();
     http.get.mockReturnValue(throwError(() => new Error('inventory-service down')));
 
-    await expect(
-      controller.getStock('p1', { correlationId: 'corr-1' } as any),
-    ).rejects.toThrow('inventory-service down');
+    const err = await controller
+      .getStock('p1', { correlationId: 'corr-1' } as any)
+      .catch((e) => e);
+
+    // Translated to a clean 503. The raw internal message must NOT reach the
+    // client — previously it propagated verbatim, leaking internal detail.
+    expect(err).toBeInstanceOf(ServiceUnavailableException);
+    expect(JSON.stringify(err.getResponse())).not.toContain('inventory-service down');
   });
 
   it('times out instead of hanging forever when inventory-service never responds', async () => {

@@ -18,7 +18,6 @@ function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText('Product ID'), 'sku-123');
     await user.clear(screen.getByLabelText('Quantity'));
     await user.type(screen.getByLabelText('Quantity'), '2');
-    await user.type(screen.getByLabelText('Customer Email'), 'buyer@example.com');
     await user.click(screen.getByRole('button', { name: /place order/i }));
   };
 }
@@ -50,7 +49,7 @@ describe('PlaceOrderPage', () => {
     await fillAndSubmit(user)();
 
     expect(api.createOrder).toHaveBeenCalledWith(
-      { productId: 'sku-123', quantity: 2, customerEmail: 'buyer@example.com' },
+      { productId: 'sku-123', quantity: 2 },
       expect.any(String),
     );
 
@@ -94,7 +93,6 @@ describe('PlaceOrderPage', () => {
     await user.type(screen.getByLabelText('Product ID'), 'sku-123');
     await user.clear(screen.getByLabelText('Quantity'));
     await user.type(screen.getByLabelText('Quantity'), '2');
-    await user.type(screen.getByLabelText('Customer Email'), 'buyer@example.com');
 
     // Simulate a double-click firing the handler twice back-to-back, both
     // before React has re-rendered the disabled button.

@@ -7,12 +7,14 @@ import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { CorrelationIdMiddleware } from './common/correlation-id.middleware';
 import { HealthModule } from './health/health.module';
 import { InventoryModule } from './inventory/inventory.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
     HttpModule,
     HealthModule,
     InventoryModule,
+    AuthModule,
     // 100 requests / 60s per client (by IP) across the gateway. Generous
     // enough not to trip up normal UI polling (2s interval on order detail),
     // tight enough to blunt an accidental or abusive hammering of the API.

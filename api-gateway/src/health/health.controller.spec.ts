@@ -28,3 +28,19 @@ describe('HealthController', () => {
     );
   });
 });
+
+import { JwtAuthGuard } from '../common/jwt-auth.guard';
+
+describe('HealthController is not behind auth', () => {
+  it('has no JwtAuthGuard applied, so orchestrator probes need no credentials', () => {
+    // Guards are per-controller here; this asserts nobody later blanket-
+    // applies JwtAuthGuard globally and silently breaks liveness probes.
+    const controllerGuards = Reflect.getMetadata('__guards__', HealthController) || [];
+    const methodGuards = [
+      Reflect.getMetadata('__guards__', HealthController.prototype.checkHealth) || [],
+      Reflect.getMetadata('__guards__', HealthController.prototype.checkReady) || [],
+    ].flat();
+
+    expect([...controllerGuards, ...methodGuards]).not.toContain(JwtAuthGuard);
+  });
+});
