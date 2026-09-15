@@ -8,6 +8,18 @@ import {
 } from '@nestjs/common';
 import { HttpAdapterHost } from '@nestjs/core';
 
+// Reduce a Nest exception response to the flat string (or string[]) a client
+// can render directly.
+function unwrapMessage(response: unknown): string | string[] {
+  if (typeof response === 'string') return response;
+
+  const inner = (response as { message?: unknown } | null)?.message;
+  if (typeof inner === 'string') return inner;
+  if (Array.isArray(inner)) return inner as string[];
+
+  return 'Request failed';
+}
+
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger('ExceptionFilter');
@@ -37,10 +49,18 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // For HttpExceptions, use their structured message (e.g. the array of
     // validation errors from ValidationPipe). Otherwise a generic message —
     // never leak an internal error's raw text/stack to the client.
-    const message =
-      exception instanceof HttpException
-        ? exception.getResponse()
-        : 'Internal server error';
+    //
+    // getResponse() returns EITHER a string or an object like
+    // { statusCode, message, error }. Assigning that object straight to
+    // `message` nests it one level deep, so clients doing the obvious
+    // `body.message` got an object and rendered "[object Object]". Worse, a
+    // downstream service's nested body then defeated translateProxyError's
+    // `typeof body.message === 'string'` check at the gateway, replacing the
+    // real reason with a blanket "Request failed". Unwrap to the inner
+    // message, keeping arrays intact so per-field validation detail survives.
+    const message = exception instanceof HttpException
+      ? unwrapMessage(exception.getResponse())
+      : 'Internal server error';
 
     const correlationId = request.headers?.['x-correlation-id'] || 'none';
 
