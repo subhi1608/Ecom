@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   rabbitmq:
     image: rabbitmq:3-management
@@ -24,6 +22,11 @@ services:
       - "5435:5432"
     volumes:
       - payment_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   orders-db:
     image: postgres:16-alpine
@@ -36,6 +39,11 @@ services:
       - "5433:5432"
     volumes:
       - orders_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d orders_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   inventory-db:
     image: postgres:16-alpine
@@ -48,6 +56,11 @@ services:
       - "5434:5432"
     volumes:
       - inventory_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d inventory_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   auth-db:
     image: postgres:16-alpine
@@ -60,6 +73,11 @@ services:
       - "5436:5432"
     volumes:
       - auth_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   order-service:
     build: ./order-service
@@ -68,8 +86,10 @@ services:
     ports:
       - "3001:3001"
     depends_on:
-      - rabbitmq
-      - orders-db
+      rabbitmq:
+        condition: service_healthy
+      orders-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 10s
@@ -83,8 +103,10 @@ services:
     ports:
       - "3002:3002"
     depends_on:
-      - rabbitmq
-      - inventory-db
+      rabbitmq:
+        condition: service_healthy
+      inventory-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3002/health"]
       interval: 10s
@@ -98,8 +120,10 @@ services:
     ports:
       - "3003:3003"
     depends_on:
-      - rabbitmq
-      - payment-db
+      rabbitmq:
+        condition: service_healthy
+      payment-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3003/health"]
       interval: 10s
@@ -113,7 +137,8 @@ services:
     ports:
       - "3004:3004"
     depends_on:
-      - rabbitmq
+      rabbitmq:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3004/health"]
       interval: 10s
@@ -127,7 +152,8 @@ services:
     ports:
       - "3005:3005"
     depends_on:
-      - auth-db
+      auth-db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3005/health"]
       interval: 10s
@@ -141,8 +167,10 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - order-service
-      - auth-service
+      order-service:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 10s
